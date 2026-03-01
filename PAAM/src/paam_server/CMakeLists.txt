@@ -3,21 +3,20 @@ project(paam_server)
 
 set(ROS_VERSION $ENV{ROS_VERSION})
 
-# Default to C++14
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD_REQUIRED ON)
-  set(CMAKE_CXX_STANDARD 20)
-endif()
-set(CMAKE_C_FLAGS "-Wall -pthread")
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_C_FLAGS "-pthread")
 set(CMAKE_C_FLAGS_DEBUG "-g -O0")
 set(CMAKE_C_FLAGS_RELEASE "-O3")
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} -std=c++14 -lstdc++")
+set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}")
 set(CMAKE_CXX_FLAGS_DEBUG ${CMAKE_C_FLAGS_DEBUG})
 set(CMAKE_CXX_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
 
-if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wall -Wextra)
-endif()
+# if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+#   add_compile_options(-Wall -Wextra)
+# endif()
+
 if(${PICAS})
   add_compile_options(-DPICAS)
 endif()
@@ -54,28 +53,45 @@ set(dependencies
   image_transport
 )
 SET(CUDA_VERBOSE_BUILD ON CACHE BOOL "nvcc verbose" FORCE)
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -O3")
 SET(LIB_TYPE SHARED)
 
 
-# Must match with commit that libedgetpu.so was built from.
 set(TENSORFLOW_COMMIT d855adfc5a0195788bf5f92c3c7352e638aa1109)
-    set(EDGE_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
-    set(TF_INSTALL_PREFIX "generic-aarch64_armv8-a")
-    set(CROSS_PREFIX "aarch64-linux-gnu-")
-    set(TF_COMMAND make -j12 TARGET=generic-aarch64 TARGET_ARCH=armv8-a -C ${CMAKE_BINARY_DIR}/tensorflow/src/tf -f tensorflow/lite/tools/make/Makefile CC=${CROSS_PREFIX}g++ CXX=${CROSS_PREFIX}g++ AR=${CROSS_PREFIX}ar CFLAGS=-fpermissive lib)
+set(EDGE_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
+
+if(EDGE_ARCH STREQUAL "x86_64" OR EDGE_ARCH STREQUAL "amd64")
+  set(EDGE_ARCH "k8")          # libedgetpu uses "k8" for x86_64
+elseif(EDGE_ARCH STREQUAL "arm64")
+  set(EDGE_ARCH "aarch64")
+endif()
+
+if(EDGE_ARCH STREQUAL "aarch64")
+  set(TF_INSTALL_PREFIX "generic-aarch64_armv8-a")
+  set(CROSS_PREFIX "aarch64-linux-gnu-")
+  set(TF_COMMAND make -j12 TARGET=generic-aarch64 TARGET_ARCH=armv8-a -C ${CMAKE_BINARY_DIR}/tensorflow/src/tf -f tensorflow/lite/tools/make/Makefile CC=${CROSS_PREFIX}g++ CXX=${CROSS_PREFIX}g++ AR=${CROSS_PREFIX}ar CFLAGS=-fpermissive lib)
+else()
+  set(TF_INSTALL_PREFIX "linux_x86_64")
+  set(CROSS_PREFIX "")
+  set(TF_COMMAND make -j12 -C ${CMAKE_BINARY_DIR}/tensorflow/src/tf -f tensorflow/lite/tools/make/Makefile CXXFLAGS="-std=c++17" lib)
+endif()
 
 include(ExternalProject)
 
 ExternalProject_Add(absl_src
     GIT_REPOSITORY https://github.com/abseil/abseil-cpp
-    GIT_PROGRESS 1
+    GIT_PROGRESS 0
     GIT_SHALLOW 1
     PREFIX "absl"
-    PATCH_COMMAND sed -i /ABSL_RANDOM_HWAES_X64_FLAGS/d
-    ${CMAKE_BINARY_DIR}/absl/src/absl_src/absl/copts/AbseilConfigureCopts.cmake
-    && sed -i /random/d ${CMAKE_BINARY_DIR}/absl/src/absl_src/absl/CMakeLists.txt
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/absl_install -DCMAKE_INSTALL_LIBDIR=lib
+    PATCH_COMMAND /bin/bash -lc
+      "sed -i '/ABSL_RANDOM_HWAES_X64_FLAGS/d' '${CMAKE_BINARY_DIR}/absl/src/absl_src/absl/copts/AbseilConfigureCopts.cmake' && \
+       sed -i '/random/d' '${CMAKE_BINARY_DIR}/absl/src/absl_src/absl/CMakeLists.txt'"
+    CMAKE_ARGS
+      -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/absl_install
+      -DCMAKE_INSTALL_LIBDIR=lib
+      -DCMAKE_CXX_STANDARD=17
+      -DCMAKE_CXX_REQUIRED=ON
+      -DCMAKE_CXX_EXTENSIONS=OFF
+      -DCMAKE_CXX_FLAGS=-std=c++17
     BUILD_BYPRODUCTS libabsl_synchronization.a libabsl_symbolize.a
 )
 set(ABSL_LIBS absl_synchronization absl_stacktrace absl_symbolize absl_demangle_internal absl_debugging_internal absl_dynamic_annotations absl_time absl_time_zone absl_graphcycles_internal absl_failure_signal_handler absl_malloc_internal absl_base absl_spinlock_wait)
@@ -83,11 +99,12 @@ set(ABSL_LIBS absl_synchronization absl_stacktrace absl_symbolize absl_demangle_
 ExternalProject_Add(glog_src
     GIT_REPOSITORY https://github.com/google/glog
     GIT_TAG v0.6.0
-    GIT_PROGRESS 1
+    GIT_PROGRESS 0
     GIT_SHALLOW 1
-    CMAKE_ARGS -DWITH_GFLAGS=OFF
-    -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/glog_install
-    -DCMAKE_INSTALL_LIBDIR=lib
+    CMAKE_ARGS
+      -DWITH_GFLAGS=OFF
+      -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/glog_install
+      -DCMAKE_INSTALL_LIBDIR=lib
     PREFIX "glog_src"
     BUILD_BYPRODUCTS  libglog.a
 )

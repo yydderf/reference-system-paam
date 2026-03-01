@@ -1,0 +1,76 @@
+---
+#------------------------------------------------------------------------------
+# UNIFIED DOCKER COMPOSE
+#------------------------------------------------------------------------------
+
+x-common: &common
+  privileged: true
+  network_mode: host
+  stdin_open: true
+  tty: true
+  ipc: host
+  env_file:
+    - .env
+  environment:
+    DISPLAY: "${DISPLAY}"
+    QT_X11_NO_MITSHM: "1"
+    XDG_RUNTIME_DIR: "/tmp/runtime-ros"
+    # Optional ROS settings (override in .env if you want)
+    ROS_DISTRO: "galactic"
+    ROS_LOCALHOST_ONLY: "${ROS_LOCALHOST_ONLY:-1}"
+    RMW_IMPLEMENTATION: "${RMW_IMPLEMENTATION:-rmw_cyclonedds_cpp}"
+  volumes:
+    # X11 socket for GUI apps (rviz2, rqt, gazebo)
+    - /tmp/.X11-unix:/tmp/.X11-unix:rw
+    # some desktops need this for GUI apps
+    - ${XDG_RUNTIME_DIR:-/run/user/1000}:/tmp/runtime-ros:rw
+
+x-build: &build
+  context: .
+  dockerfile: dockerfiles/Dockerfile
+  args:
+    USERNAME: "${USERNAME:-ros}"
+    USER_UID: "${HOST_UID:-1000}"
+    USER_GID: "${HOST_GID:-1000}"
+  target: development
+
+services:
+  dev:
+    <<: *common
+    build: *build
+    image: ros2-galactic-cuda-opencv:dev
+    container_name: ros2_dev
+    gpus: all
+    # privileged: true
+    # volumes:
+    #   - /dev:/dev
+    volumes:
+      - .:/home/${USERNAME:-ros}/workspace:cached
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XDG_RUNTIME_DIR:-/run/user/1000}:/tmp/runtime-ros:rw
+    working_dir: /home/${USERNAME:-ros}
+    command: ["/bin/bash", "-lc", "echo $RMW_IMPLEMENTATION"]
+
+  # Build ROS2 workspace inside container (uses your entrypoint)
+  build_ros2:
+    <<: *common
+    build: *build
+    image: ros2-galactic-cuda-opencv:dev
+    container_name: ros2_build
+    gpus: all
+    volumes:
+      - .:/home/${USERNAME:-ros}/workspace:cached
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XDG_RUNTIME_DIR:-/run/user/1000}:/tmp/runtime-ros:rw
+    working_dir: /home/${USERNAME:-ros}
+    command:
+      [
+        "/bin/bash",
+        "-lc",
+        "cd workspace \
+          && rosdep update --include-eol-distros \
+          && rosdep install --from-paths . --ignore-src -y --rosdistro galactic --include-eol-distros --skip-keys 'OpenCV cuda cudart' \
+          && colcon build --symlink-install --cmake-args -DCMAKE_CXX_STANDARD=17 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DPICAS=TRUE -DPAAM=TRUE \
+          && cd .. \
+          && exec /bin/bash",
+      ]
