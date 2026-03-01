@@ -1,12 +1,10 @@
-##############################################
-# Created from template ros2.dockerfile.jinja
-##############################################
+##########################################################################
+# Created from template athackst/dockerfiles/ros2/galactic-cuda.Dockerfile
+##########################################################################
 
 ###########################################
 # Base image 
 ###########################################
-# FROM nvidia/cuda:11.8.0-runtime-ubuntu20.04 AS base
-# FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04 AS base
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04 AS base
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -99,22 +97,14 @@ FROM base AS development
 
 # Include the package of ros
 RUN sudo apt-get update && sudo apt-get install -y \
-    curl \
-    gnupg2 \
-    lsb-release \
-    sudo \
+  curl \
+  gnupg2 \
+  lsb-release \
+  sudo \
   && sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg \
   && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
 
 ENV ROS_DISTRO=galactic
-# ENV AMENT_PREFIX_PATH=/opt/ros/galactic
-# ENV COLCON_PREFIX_PATH=/opt/ros/galactic
-# ENV LD_LIBRARY_PATH=/opt/ros/galactic/lib
-# ENV PATH=/opt/ros/galactic/bin:$PATH
-# ENV PYTHONPATH=/opt/ros/galactic/lib/python3.8/site-packages
-# ENV ROS_PYTHON_VERSION=3
-# ENV ROS_VERSION=2
-# ENV DEBIAN_FRONTEND=noninteractive
 
 RUN sudo apt-get update && sudo apt-get install -y \
   bash-completion \
@@ -174,29 +164,29 @@ RUN mkdir -p $ROS2_DIR/src; \
   sed -i "/version='1.1.2'/a\    py_modules=[]," $ROS2_DIR/src/ros-visualization/rqt/rqt/setup.py
 
 RUN sudo apt-get install -y \
-    unzip \
-    libflatbuffers-dev \
-    flatbuffers-compiler \
-    libboost-python1.71-dev \
-    libboost-python-dev \
-    ros-galactic-ament-cmake-python \
-	ros-galactic-ament-cmake-ros \
-	ros-galactic-rclcpp \
-	ros-galactic-message-filters \
-	ros-galactic-sensor-msgs \
-	ros-galactic-pluginlib \
-	ros-galactic-ament-lint-auto \
-	ros-galactic-tf2 \
-	ros-galactic-yaml-cpp-vendor \
-	ros-galactic-ament-cmake-cppcheck \
-	ros-galactic-eigen3-cmake-module \
-	ros-galactic-ament-cmake-cpplint \
-	ros-galactic-ament-cmake-lint-cmake \
-	ros-galactic-ament-cmake-uncrustify \
-    ros-galactic-ament-cmake-auto \
-    ros-galactic-ros-environment \
-	ros-galactic-image-transport
-
+  unzip \
+  libgflags-dev \
+  libflatbuffers-dev \
+  flatbuffers-compiler \
+  libboost-python1.71-dev \
+  libboost-python-dev \
+  ros-galactic-ament-cmake-python \
+  ros-galactic-ament-cmake-ros \
+  ros-galactic-rclcpp \
+  ros-galactic-message-filters \
+  ros-galactic-sensor-msgs \
+  ros-galactic-pluginlib \
+  ros-galactic-ament-lint-auto \
+  ros-galactic-tf2 \
+  ros-galactic-yaml-cpp-vendor \
+  ros-galactic-ament-cmake-cppcheck \
+  ros-galactic-eigen3-cmake-module \
+  ros-galactic-ament-cmake-cpplint \
+  ros-galactic-ament-cmake-lint-cmake \
+  ros-galactic-ament-cmake-uncrustify \
+  ros-galactic-ament-cmake-auto \
+  ros-galactic-ros-environment \
+  ros-galactic-image-transport
 
 # RUN source /opt/ros/galactic/setup.sh
 
@@ -217,8 +207,6 @@ RUN echo "source ~/ros2_galactic/install/setup.bash" >> /home/$USERNAME/.bashrc 
 
 COPY dockerfiles/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN sudo chmod +x /usr/local/bin/entrypoint.sh
-
-RUN sudo apt-get install libgflags-dev -y
 
 SHELL ["/bin/bash", "-c"]
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
