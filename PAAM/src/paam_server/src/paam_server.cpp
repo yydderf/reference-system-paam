@@ -52,7 +52,10 @@
 #include <numeric>
 #include <utility>
 #include <vector>
+#include <filesystem>
+#include <ament_index_cpp/get_package_share_directory.hpp>
 #include "logging.h"
+
 using namespace std::chrono_literals;
 using namespace cv::dnn;
 using namespace cv;
@@ -314,8 +317,13 @@ private:
 
   std::vector<std::string> load_class_list()
   {
+    auto pkg = ament_index_cpp::get_package_share_directory("paam_server");
+    std::filesystem::path file = std::filesystem::path(pkg) / "net" / "classes.txt";
+    std::ifstream ifs(file);
+    if (!ifs) {
+      throw std::runtime_error("Cannot open " + file.string());
+    }
     std::vector<std::string> class_list;
-    std::ifstream ifs("/home/paam/Research/PAAM-RTAS/src/paam_server/net/classes.txt");
     std::string line;
     while (getline(ifs, line))
     {
@@ -326,7 +334,9 @@ private:
 
   void load_net(cv::dnn::Net &net)
   {
-    auto result = cv::dnn::readNet("/home/paam/Research/PAAM-RTAS/src/paam_server/net/yolov5s.onnx");
+    auto pkg = ament_index_cpp::get_package_share_directory("paam_server");
+    auto file = std::filesystem::path(pkg) / "net" / "yolov5s.onnx";
+    auto result = cv::dnn::readNet(file.string());
     result.setPreferableBackend(cv::dnn::DNN_BACKEND_CUDA);
     result.setPreferableTarget(cv::dnn::DNN_TARGET_CUDA);
     net = result;
@@ -1382,9 +1392,11 @@ private:
   {
     this->timer_->cancel();
   }
-  std::string model_file = "/home/paam/Research/PAAM-RTAS/src/paam_server/test_data/inception_v2_224_quant_edgetpu.tflite";
-  std::string label_file = "/home/paam/Research/PAAM-RTAS/src/paam_server/test_data/imagenet_labels.txt.1";
-  std::string input_file = "/home/paam/Research/PAAM-RTAS/src/paam_server/test_data/resized_cat.bmp";
+  std::string pkg = ament_index_cpp::get_package_share_directory("paam_server");
+  std::filesystem::path base = std::filesystem::path(pkg) / "test_data";
+  std::string model_file = (base / "inception_v2_224_quant_edgetpu.tflite").string();
+  std::string label_file = (base / "imagenet_labels.txt.1").string();
+  std::string input_file = (base / "resized_cat.bmp").string();
   std::unique_ptr<tflite::FlatBufferModel> model;
   std::unique_ptr<tflite::Interpreter> interpreter;
   std::shared_ptr<edgetpu::EdgeTpuContext> edgetpu_context;
@@ -1454,7 +1466,7 @@ private:
     int image_height = 0;
     int image_bpp = 0;
     auto image = ReadBmpImage(this->input_file.c_str(), &image_width, &image_height, &image_bpp);
-    std::printf("Image size: %d x %d x %d. Image vector size: %d\n", image_width, image_height, image_bpp, image.size());
+    std::printf("Image size: %d x %d x %d. Image vector size: %ld\n", image_width, image_height, image_bpp, image.size());
     auto labels = ReadLabels(this->label_file);
     double threshold = 0.1;
     if (image.empty())

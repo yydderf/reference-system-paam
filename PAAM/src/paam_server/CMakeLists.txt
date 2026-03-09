@@ -6,10 +6,8 @@ set(ROS_VERSION $ENV{ROS_VERSION})
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_C_FLAGS "-pthread")
 set(CMAKE_C_FLAGS_DEBUG "-g -O0")
 set(CMAKE_C_FLAGS_RELEASE "-O3")
-set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}")
 set(CMAKE_CXX_FLAGS_DEBUG ${CMAKE_C_FLAGS_DEBUG})
 set(CMAKE_CXX_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
 
@@ -17,39 +15,41 @@ set(CMAKE_CXX_FLAGS_RELEASE ${CMAKE_C_FLAGS_RELEASE})
 #   add_compile_options(-Wall -Wextra)
 # endif()
 
-if(${PICAS})
-  add_compile_options(-DPICAS)
+if(PICAS)
+    add_compile_definitions(PICAS)
 endif()
-if(${OVERHEAD_DEBUG})
-  add_compile_options(-DOVERHEAD_DEBUG)
+if(OVERHEAD_DEBUG)
+    add_compile_definitions(OVERHEAD_DEBUG)
 endif()
 include_directories(../../include)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
-set(OpenCV_DIR "/usr/local/include/opencv4")
+# set(OpenCV_DIR "/usr/local/include/opencv4")
 
 include_directories(${OpenCV_INCLUDE_DIRS})
+find_package(Threads REQUIRED)
 find_package(ros_environment REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(ament_cmake REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
-find_package(CUDA REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(paam_server_interfaces REQUIRED)
-find_package(OpenCV REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(image_transport REQUIRED)
-find_package (Eigen3 REQUIRED)
+find_package(OpenCV REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(CUDA REQUIRED)
 link_directories(${Eigen_INCLUDE_DIRS})
 find_package (gflags 2.2.2) 
 set(dependencies
   rclcpp
   rclcpp_action
   paam_server_interfaces
+  sensor_msgs
   std_msgs
   cv_bridge
-  OpenCV
   image_transport
 )
 SET(CUDA_VERBOSE_BUILD ON CACHE BOOL "nvcc verbose" FORCE)
@@ -60,19 +60,19 @@ set(TENSORFLOW_COMMIT d855adfc5a0195788bf5f92c3c7352e638aa1109)
 set(EDGE_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
 
 if(EDGE_ARCH STREQUAL "x86_64" OR EDGE_ARCH STREQUAL "amd64")
-  set(EDGE_ARCH "k8")          # libedgetpu uses "k8" for x86_64
+    set(EDGE_ARCH "k8")          # libedgetpu uses "k8" for x86_64
 elseif(EDGE_ARCH STREQUAL "arm64")
-  set(EDGE_ARCH "aarch64")
+    set(EDGE_ARCH "aarch64")
 endif()
 
 if(EDGE_ARCH STREQUAL "aarch64")
-  set(TF_INSTALL_PREFIX "generic-aarch64_armv8-a")
-  set(CROSS_PREFIX "aarch64-linux-gnu-")
-  set(TF_COMMAND make -j12 TARGET=generic-aarch64 TARGET_ARCH=armv8-a -C ${CMAKE_BINARY_DIR}/tensorflow/src/tf -f tensorflow/lite/tools/make/Makefile CC=${CROSS_PREFIX}g++ CXX=${CROSS_PREFIX}g++ AR=${CROSS_PREFIX}ar CFLAGS=-fpermissive lib)
+    set(TF_INSTALL_PREFIX "generic-aarch64_armv8-a")
+    set(CROSS_PREFIX "aarch64-linux-gnu-")
+    set(TF_COMMAND make -j12 TARGET=generic-aarch64 TARGET_ARCH=armv8-a -C ${CMAKE_BINARY_DIR}/tensorflow/src/tf -f tensorflow/lite/tools/make/Makefile CC=${CROSS_PREFIX}g++ CXX=${CROSS_PREFIX}g++ AR=${CROSS_PREFIX}ar CFLAGS=-fpermissive lib)
 else()
-  set(TF_INSTALL_PREFIX "linux_x86_64")
-  set(CROSS_PREFIX "")
-  set(TF_COMMAND make -j12 -C ${CMAKE_BINARY_DIR}/tensorflow/src/tf -f tensorflow/lite/tools/make/Makefile CXXFLAGS="-std=c++17" lib)
+    set(TF_INSTALL_PREFIX "linux_x86_64")
+    set(CROSS_PREFIX "")
+    set(TF_COMMAND make -j12 -C ${CMAKE_BINARY_DIR}/tensorflow/src/tf -f tensorflow/lite/tools/make/Makefile CXXFLAGS="-std=c++17" lib)
 endif()
 
 include(ExternalProject)
@@ -156,27 +156,36 @@ add_library(admissions src/admissions.cpp include/admissions.h)
 
 ament_target_dependencies(paam_server ${dependencies})
 ament_target_dependencies(cudalib ${dependencies})
+
 target_link_libraries(paam_server
+  cudart
   cudalib
   admissions
   model_utils
+  ${OpenCV_LIBS}
   ${TF_LITE_LIB} 
   ${TF_ET_SRC_LIB}
   ${CUDA_LIBRARIES}
-  cudart
-  )
+  Eigen3::Eigen
+  Threads::Threads
+  ament_index_cpp::ament_index_cpp
+)
+
 add_dependencies(paam_server model_utils tf)
-target_link_libraries(${PROJECT_NAME}
-   ${Eigen_LIBRARIES}
-   )
-target_link_libraries(paam_server ${OpenCV_LIBS})
+
 if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  ament_lint_auto_find_test_dependencies()
+    find_package(ament_lint_auto REQUIRED)
+    ament_lint_auto_find_test_dependencies()
 endif()
 
-install(TARGETS
-  paam_server
-  DESTINATION lib/${PROJECT_NAME})
+install(
+    TARGETS paam_server
+    DESTINATION lib/${PROJECT_NAME}
+)
+
+install(
+    DIRECTORY net test_data
+    DESTINATION share/${PROJECT_NAME}
+)
 
 ament_package()
